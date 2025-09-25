@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VN Banknotes — Classifier</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="logo">₫</div><h1>Vietnamese Banknotes</h1></div>
+  <p class="muted">Server đã load <code>model.h5</code> • Tải ảnh để nhận mệnh giá</p>
+</header>
+
+<main class="container">
+  <section class="panel">
+    <h2>Upload Ảnh</h2>
+    <form id="form">
+      <input id="file" type="file" accept="image/*" />
+      <button type="submit">Detect</button>
+    </form>
+    <div id="preview" class="preview hidden"><img id="imgPreview" alt="preview" /></div>
+  </section>
+
+  <section class="panel">
+    <h2>Kết quả</h2>
+    <div id="result" class="card">
+      <div class="denomination" id="deno">—</div>
+      <div class="confidence" id="conf">—</div>
+      <div id="bars"></div>
+    </div>
+    <div class="tip">Tip: chụp phẳng, đủ sáng; tránh bóng/loá.</div>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>Made for Vietnamese banknotes recognition</span>
+</footer>
+
+<script>
+const form = document.getElementById('form');
+const fileInput = document.getElementById('file');
+const preview = document.getElementById('preview');
+const imgPreview = document.getElementById('imgPreview');
+const deno = document.getElementById('deno');
+const conf = document.getElementById('conf');
+const bars = document.getElementById('bars');
+
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  imgPreview.src = url;
+  preview.classList.remove('hidden');
+});
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = fileInput.files[0];
+  if (!f) return alert("Chọn 1 ảnh trước đã");
+  deno.innerText = "Đang nhận dạng…";
+  conf.innerText = "—";
+  bars.innerHTML = "";
+
+  const fd = new FormData(); fd.append('image', f);
+  const res = await fetch('/predict', { method: 'POST', body: fd });
+  const js = await res.json();
+  if (!res.ok) return alert(js.error || "Lỗi server");
+
+  deno.innerText = js.label;
+  conf.innerText = "Confidence: " + (js.confidence*100).toFixed(2) + "%";
+
+  const entries = Object.entries(js.probs).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  for (const [lab,p] of entries){
+    const row = document.createElement('div'); row.className = 'barrow';
+    const name = document.createElement('span'); name.className='barlabel';
+    // format hiển thị: 000200 -> 200.000 ₫
+    const valInt = parseInt(lab) || 0;
+    name.innerText = valInt ? new Intl.NumberFormat('vi-VN').format(valInt).replace(/,/g,'.') + ' ₫' : lab;
+    const bar = document.createElement('div'); bar.className='bar';
+    const fill = document.createElement('div'); fill.className='fill'; fill.style.width=(p*100).toFixed(1)+'%';
+    const val = document.createElement('span'); val.className='barval'; val.innerText=(p*100).toFixed(1)+'%';
+    bar.appendChild(fill); row.appendChild(name); row.appendChild(bar); row.appendChild(val);
+    bars.appendChild(row);
+  }
+});
+</script>
+</body>
+</html>
